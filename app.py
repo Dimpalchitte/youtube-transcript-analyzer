@@ -141,31 +141,50 @@ def get_transcript(url, target_lang='en'):
         elif "youtube.com" in url:
             video_id = url.split("v=")[1].split("&")[0]
         else:
-            raise ValueError("Invalid YouTube URL format")
-            
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-        
+            st.error("Invalid YouTube URL format. Please enter a valid YouTube video URL.")
+            return None
+
         try:
-            # Try to get manual transcript first
-            transcript = transcript_list.find_manually_created_transcript(['en', 'hi', 'mr', 'es', 'fr', 'de', 'ja', 'ko', 'ru'])
+            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        except Exception as e:
+            logger.error(f"Transcript list error: {str(e)}")
+            st.error(
+                "Could not retrieve a transcript for this video. "
+                "This can happen even if subtitles are visible on YouTube, due to copyright, region, or YouTube restrictions. "
+                "Please try another video."
+            )
+            return None
+
+        transcript = None
+        original_lang = None
+
+        # Try manual transcript
+        try:
+            transcript = transcript_list.find_manually_created_transcript(
+                ['en', 'hi', 'mr', 'es', 'fr', 'de', 'ja', 'ko', 'ru']
+            )
             original_lang = transcript.language_code
-        except:
+        except Exception:
+            # Try auto-generated transcript
             try:
-                # If no manual transcript, try auto-generated
-                transcript = transcript_list.find_generated_transcript(['en', 'hi', 'mr', 'es', 'fr', 'de', 'ja', 'ko', 'ru'])
+                transcript = transcript_list.find_generated_transcript(
+                    ['en', 'hi', 'mr', 'es', 'fr', 'de', 'ja', 'ko', 'ru']
+                )
                 original_lang = transcript.language_code
-            except:
-                logger.error("No transcript available")
-                st.error("No transcript available for this video in the supported languages.")
-                raise Exception("No transcript available")
-        
+            except Exception:
+                st.error(
+                    "No transcript available for this video in the supported languages. "
+                    "Please try another video."
+                )
+                return None
+
+        # Try translation if needed
         if target_lang != original_lang:
             try:
                 transcript = transcript.translate(target_lang)
-            except Exception as e:
-                logger.warning(f"Translation failed: {str(e)}")
+            except Exception:
                 st.warning(f"Could not translate to {target_lang}. Using original language.")
-        
+
         # Fetch and combine transcript text
         try:
             transcript_parts = transcript.fetch()
@@ -175,24 +194,23 @@ def get_transcript(url, target_lang='en'):
                     text_parts.append(part['text'])
                 elif hasattr(part, 'text'):
                     text_parts.append(part.text)
-                    
             full_text = ' '.join(text_parts)
-            
             if not full_text:
-                raise Exception("Empty transcript")
-                
+                st.error("Transcript is empty. Please try another video.")
+                return None
             return {
                 'text': full_text,
                 'original_language': original_lang
             }
         except Exception as e:
             logger.error(f"Error processing transcript: {str(e)}")
-            raise Exception(f"Failed to process transcript: {str(e)}")
-            
+            st.error("Transcript could not be processed. Please try another video.")
+            return None
+
     except Exception as e:
         logger.error(f"Transcript error: {str(e)}")
-        st.error(f"Error fetching transcript: {str(e)}")
-        raise e
+        st.error("An unexpected error occurred while fetching the transcript. Please try another video.")
+        return None
 
 # Main app layout
 st.title("YouTube Video Summarizer")
@@ -248,6 +266,8 @@ if url:
                     try:
                         with st.spinner("Generating summary..."):
                             transcript_data = get_cached_transcript(url, 'en')
+                            if transcript_data is None:
+                                st.stop()
                             summary = generate_cached_summary(transcript_data['text'])
                             st.write(summary)
                     except Exception as e:
@@ -261,6 +281,8 @@ if url:
                     with st.spinner("Thinking..."):
                         try:
                             transcript_data = get_transcript(url, 'en')
+                            if transcript_data is None:
+                                st.stop()
                             chat_prompt = f"Based on this video transcript: {transcript_data['text']}\n\nQuestion: {user_question}\n\nAnswer:"
                             chat_completion = client.chat.completions.create(
                                 messages=[{"role": "user", "content": chat_prompt}],
@@ -276,6 +298,8 @@ if url:
                 with transcript_container:
                     with st.spinner("Fetching transcript..."):
                         transcript_data = get_cached_transcript(url, target_language)
+                        if transcript_data is None:
+                            st.stop()
                         st.info(f"Original video language detected: {transcript_data['original_language']}")
                         st.markdown("### Video Transcription")
                         st.write(transcript_data['text'])
