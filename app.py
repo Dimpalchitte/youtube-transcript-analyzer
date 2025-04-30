@@ -63,54 +63,132 @@ def generate_cached_summary(transcript_text):
         logger.error(f"Error generating summary: {str(e)}")
         raise
 
-# Custom CSS for dark theme and layout
+# Custom CSS for enhanced theme and layout
 st.markdown("""
     <style>
+        /* Main App Background with Gradient */
         .stApp {
-            background-color: #1a1a1a;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
             color: #ffffff;
         }
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 2px;
-            background-color: #2d2d2d;
+        
+        /* Title Styling */
+        .title-wrapper {
+            background: linear-gradient(90deg, #3b82f6, #2563eb);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2);
         }
+        
+        /* Card-like containers */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 8px;
+            background-color: rgba(45, 45, 45, 0.2);
+            padding: 10px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        
         .stTabs [data-baseweb="tab"] {
             height: 50px;
-            padding-top: 10px;
-            background-color: #2d2d2d;
+            padding: 10px 20px;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            transition: all 0.3s ease;
         }
+        
         .stTabs [aria-selected="true"] {
-            background-color: #4a4a4a;
+            background: linear-gradient(90deg, #3b82f6, #2563eb);
+            border: none;
         }
+        
+        /* Button Styling */
         .stButton>button {
-            background-color: #3b82f6;
+            background: linear-gradient(90deg, #3b82f6, #2563eb);
             color: white;
             border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 0.375rem;
-            transition: none !important;
+            padding: 0.6rem 1.2rem;
+            border-radius: 10px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2);
         }
+        
         .stButton>button:hover {
-            background-color: #2563eb;
-            border: none;
-            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
+            background: linear-gradient(90deg, #2563eb, #1d4ed8);
         }
-        .stButton>button:active {
-            background-color: #1d4ed8;
-            color: white;
+        
+        /* Input Fields */
+        .stTextInput>div>div {
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            padding: 8px;
         }
-        div[data-testid="stToolbar"] {
-            display: none;
+        
+        /* Video Container */
+        .video-container {
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            margin: 20px 0;
         }
-        .main > div {
-            padding-top: 2rem;
+        
+        /* Transcript Container */
+        .transcript-box {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            backdrop-filter: blur(10px);
         }
-        .block-container {
-            padding-top: 2rem;
-            max-width: 100rem;
+        
+        /* Info Messages */
+        .stAlert {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 10px;
+            padding: 10px;
+        }
+        
+        /* Hide Streamlit Branding */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(59, 130, 246, 0.5);
+            border-radius: 5px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(59, 130, 246, 0.7);
+        }
+        
+        /* Loading Spinner */
+        .stSpinner > div {
+            border-color: #3b82f6 !important;
         }
     </style>
 """, unsafe_allow_html=True)
+
+# Wrap title in custom div
+st.markdown('<div class="title-wrapper"><h1>YouTube Video Summarizer</h1></div>', unsafe_allow_html=True)
 
 # Define the prompt
 prompt = """You are an advanced AI specializing in text summarization. Your task is to generate a structured and detailed summary of a YouTube transcript.
