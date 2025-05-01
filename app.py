@@ -5,10 +5,12 @@ from dotenv import load_dotenv
 import youtube_transcript_api
 from youtube_transcript_api import YouTubeTranscriptApi
 from groq import Groq
+import base64
 
-# Configure logging
+# Configure logging to file instead of console
 logging.basicConfig(
-    level=logging.INFO,
+    filename='app.log',  # Log to file instead of console
+    level=logging.ERROR,  # Only log errors
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -18,7 +20,7 @@ load_dotenv()
 
 # Configure page layout and theme
 st.set_page_config(
-    page_title="YouTube Video Summarizer",
+    page_title="YouTube Transcript Analyzer",
     page_icon="🎥",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -63,132 +65,108 @@ def generate_cached_summary(transcript_text):
         logger.error(f"Error generating summary: {str(e)}")
         raise
 
-# Custom CSS for enhanced theme and layout
+# Custom CSS with fixed input text visibility and clean design
 st.markdown("""
     <style>
-        /* Main App Background with Gradient */
+        /* Main Background */
         .stApp {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: #ffffff;
+            background: #fff0f3;
         }
         
-        /* Title Styling */
-        .title-wrapper {
-            background: linear-gradient(90deg, #3b82f6, #2563eb);
-            padding: 20px;
-            border-radius: 15px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2);
+        /* Ensure all text has proper contrast */
+        .stMarkdown, .stMarkdown p, .stMarkdown li {
+            color: #1a1a1a !important;
         }
         
-        /* Card-like containers */
+        /* Make sure headers and text are clearly visible */
+        h1, h2, h3, h4, h5, h6, p, li, span {
+            color: #1a1a1a !important;
+        }
+
+        /* Input field styling with visible text */
+        .stTextInput>div>div {
+            background-color: white !important;
+            border-radius: 8px;
+            border: 2px solid #ffb3c1 !important;
+            padding: 8px;
+        }
+
+        /* Make input text clearly visible */
+        .stTextInput input, .stTextArea textarea {
+            color: black !important;
+            font-size: 16px !important;
+            font-weight: 400 !important;
+            background-color: white !important;
+        }
+
+        /* Style the placeholder text */
+        .stTextInput input::placeholder, .stTextArea textarea::placeholder {
+            color: #666 !important;
+            opacity: 1 !important;
+        }
+
+        /* Tab Styling */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 8px;
-            background-color: rgba(45, 45, 45, 0.2);
-            padding: 10px;
-            border-radius: 15px;
-            backdrop-filter: blur(10px);
+            gap: 20px !important;
+            padding: 10px 15px;
+            background-color: #ffe5e9;
+            border-radius: 10px;
         }
         
         .stTabs [data-baseweb="tab"] {
             height: 50px;
             padding: 10px 20px;
-            background: rgba(59, 130, 246, 0.1);
-            border-radius: 10px;
-            border: 1px solid rgba(59, 130, 246, 0.2);
-            transition: all 0.3s ease;
+            background-color: #ffb3c1;
+            border-radius: 8px;
+            margin-right: 10px;
+            border: none;
         }
         
         .stTabs [aria-selected="true"] {
-            background: linear-gradient(90deg, #3b82f6, #2563eb);
-            border: none;
+            background-color: #ff8fa3;
         }
-        
+
         /* Button Styling */
         .stButton>button {
-            background: linear-gradient(90deg, #3b82f6, #2563eb);
+            background-color: #ff4d6d;
             color: white;
             border: none;
-            padding: 0.6rem 1.2rem;
-            border-radius: 10px;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
             font-weight: 500;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2);
+            margin: 10px 0;
+            transition: none !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        
+
         .stButton>button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
-            background: linear-gradient(90deg, #2563eb, #1d4ed8);
+            background-color: #ff758f;
+            border: none;
+            color: white;
         }
-        
-        /* Input Fields */
-        .stTextInput>div>div {
-            background-color: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-            border: 1px solid rgba(59, 130, 246, 0.2);
-            padding: 8px;
-        }
-        
-        /* Video Container */
-        .video-container {
-            border-radius: 15px;
-            overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-            margin: 20px 0;
-        }
-        
-        /* Transcript Container */
-        .transcript-box {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 15px;
-            padding: 20px;
-            margin: 20px 0;
-            border: 1px solid rgba(59, 130, 246, 0.2);
-            backdrop-filter: blur(10px);
-        }
-        
-        /* Info Messages */
-        .stAlert {
-            background: rgba(59, 130, 246, 0.1);
-            border: 1px solid rgba(59, 130, 246, 0.2);
-            border-radius: 10px;
-            padding: 10px;
-        }
-        
-        /* Hide Streamlit Branding */
+
+        /* Hide streamlit default elements */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         
-        /* Scrollbar Styling */
-        ::-webkit-scrollbar {
-            width: 10px;
-            height: 10px;
+        /* Hide logger messages */
+        .stException, .stError, .stWarning {
+            display: none !important;
         }
-        
-        ::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 5px;
+
+        /* Question input area specific styling */
+        [data-testid="stTextArea"] textarea {
+            color: black !important;
+            background-color: white !important;
+            border: 2px solid #ffb3c1 !important;
         }
-        
-        ::-webkit-scrollbar-thumb {
-            background: rgba(59, 130, 246, 0.5);
-            border-radius: 5px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(59, 130, 246, 0.7);
-        }
-        
-        /* Loading Spinner */
-        .stSpinner > div {
-            border-color: #3b82f6 !important;
+
+        /* Add some spacing between elements */
+        .block-container {
+            padding-top: 1rem;
         }
     </style>
 """, unsafe_allow_html=True)
-
-# Wrap title in custom div
-st.markdown('<div class="title-wrapper"><h1>YouTube Video Summarizer</h1></div>', unsafe_allow_html=True)
 
 # Define the prompt
 prompt = """You are an advanced AI specializing in text summarization. Your task is to generate a structured and detailed summary of a YouTube transcript.
@@ -210,6 +188,16 @@ Output Format:
 3. Insights: Deep observations and analysis
 
 Now, please summarize the following transcript:"""
+
+# Modify error display functions to be more user-friendly
+def show_error(message):
+    st.error(message, icon="🚫")
+
+def show_warning(message):
+    st.warning(message, icon="⚠️")
+
+def show_success(message):
+    st.success(message, icon="✅")
 
 def get_transcript(url, target_lang='en'):
     try:
@@ -291,7 +279,7 @@ def get_transcript(url, target_lang='en'):
         return None
 
 # Main app layout
-st.title("YouTube Video Summarizer")
+st.title("YouTube Transcript Analyzer")
 
 url = st.text_input("Enter the URL of the YouTube video")
 if url:
@@ -350,7 +338,7 @@ if url:
                             st.write(summary)
                     except Exception as e:
                         logger.error(f"Error in summary generation: {str(e)}")
-                        st.error("An error occurred while generating the summary. Please try again.")
+                        show_error("Unable to generate summary. Please try again.")
             
             with tab2:
                 st.markdown("### Ask AI about the video")
@@ -368,7 +356,8 @@ if url:
                             )
                             st.write(chat_completion.choices[0].message.content)
                         except Exception as e:
-                            st.error(f"An error occurred: {str(e)}")
+                            logger.error(f"Q&A error: {str(e)}")  # Log to file
+                            show_error("Unable to process your question. Please try again.")
 
         # Show transcript in the left column container
         if st.button("Get Transcript", key="transcript_btn"):
