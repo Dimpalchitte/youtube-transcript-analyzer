@@ -1,4 +1,4 @@
-# YouTube Video Summarizer
+# YouTube Transcript Analyzer
 
 A Streamlit web application that generates summaries of YouTube videos using AI. The app can:
 - Extract transcripts from YouTube videos
