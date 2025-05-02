@@ -298,12 +298,16 @@ def get_transcript(url, target_lang='en'):
             return None
 
         try:
+            # First try to get the transcript list
             transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
         except Exception as e:
             logger.error(f"Transcript list error: {str(e)}")
             st.error(
                 "Could not retrieve a transcript for this video. "
-                "This can happen even if subtitles are visible on YouTube, due to copyright, region, or YouTube restrictions. "
+                "This can happen if:\n"
+                "1. The video has no captions\n"
+                "2. The video is private\n"
+                "3. The video has restricted captions\n"
                 "Please try another video."
             )
             return None
@@ -311,46 +315,54 @@ def get_transcript(url, target_lang='en'):
         transcript = None
         original_lang = None
 
-        # Try manual transcript
+        # Try to find a transcript in the preferred language first
         try:
-            transcript = transcript_list.find_manually_created_transcript(
-                ['en', 'hi', 'mr', 'es', 'fr', 'de', 'ja', 'ko', 'ru']
-            )
-            original_lang = transcript.language_code
+            transcript = transcript_list.find_transcript([target_lang])
+            original_lang = target_lang
         except Exception:
-            # Try auto-generated transcript
+            # If preferred language not found, try English
             try:
-                transcript = transcript_list.find_generated_transcript(
-                    ['en', 'hi', 'mr', 'es', 'fr', 'de', 'ja', 'ko', 'ru']
-                )
-                original_lang = transcript.language_code
+                transcript = transcript_list.find_transcript(['en'])
+                original_lang = 'en'
             except Exception:
-                st.error(
-                    "No transcript available for this video in the supported languages. "
-                    "Please try another video."
-                )
-                return None
+                # If English not found, try any available transcript
+                try:
+                    transcript = transcript_list.find_transcript([])
+                    original_lang = transcript.language_code
+                except Exception:
+                    st.error(
+                        "No transcript available for this video in any supported language. "
+                        "Please try another video."
+                    )
+                    return None
 
-        # Try translation if needed
+        # Try translation if needed and if the target language is different
         if target_lang != original_lang:
             try:
                 transcript = transcript.translate(target_lang)
-            except Exception:
-                st.warning(f"Could not translate to {target_lang}. Using original language.")
+            except Exception as e:
+                logger.warning(f"Translation error: {str(e)}")
+                st.warning(f"Could not translate to {target_lang}. Using original language ({original_lang}).")
 
         # Fetch and combine transcript text
         try:
             transcript_parts = transcript.fetch()
+            if not transcript_parts:
+                st.error("Transcript is empty. Please try another video.")
+                return None
+
             text_parts = []
             for part in transcript_parts:
                 if isinstance(part, dict) and 'text' in part:
-                    text_parts.append(part['text'])
+                    text_parts.append(part['text'].strip())
                 elif hasattr(part, 'text'):
-                    text_parts.append(part.text)
+                    text_parts.append(part.text.strip())
+
             full_text = ' '.join(text_parts)
-            if not full_text:
+            if not full_text.strip():
                 st.error("Transcript is empty. Please try another video.")
                 return None
+
             return {
                 'text': full_text,
                 'original_language': original_lang
