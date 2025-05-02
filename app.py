@@ -8,6 +8,8 @@ from groq import Groq
 import base64
 from gtts import gTTS
 import io
+import time
+from functools import wraps
 
 # --- gTTS Helper ---
 def tts_audio(text, lang='en'):
@@ -52,8 +54,26 @@ def get_groq_client():
 # Initialize Groq client
 client = get_groq_client()
 
-# Add cache for transcript fetching
-@st.cache_data(ttl=3600)  # Cache for 1 hour
+# Add retry decorator
+def retry_on_failure(max_retries=3, delay=1):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Attempt {attempt + 1} failed: {str(e)}. Retrying in {delay} seconds...")
+                        time.sleep(delay)
+            raise last_exception
+        return wrapper
+    return decorator
+
+# Add cache for transcript fetching with longer TTL
+@st.cache_data(ttl=7200)  # Cache for 2 hours
 def get_cached_transcript(url, target_lang='en'):
     return get_transcript(url, target_lang)
 
@@ -286,6 +306,7 @@ def show_warning(message):
 def show_success(message):
     st.success(message, icon="✅")
 
+@retry_on_failure(max_retries=3, delay=2)
 def get_transcript(url, target_lang='en'):
     try:
         # Handle different YouTube URL formats
@@ -308,7 +329,8 @@ def get_transcript(url, target_lang='en'):
                 "1. The video has no captions\n"
                 "2. The video is private\n"
                 "3. The video has restricted captions\n"
-                "Please try another video."
+                "4. YouTube's API is temporarily unavailable\n"
+                "Please try again in a few moments or try another video."
             )
             return None
 
@@ -369,12 +391,12 @@ def get_transcript(url, target_lang='en'):
             }
         except Exception as e:
             logger.error(f"Error processing transcript: {str(e)}")
-            st.error("Transcript could not be processed. Please try another video.")
+            st.error("Transcript could not be processed. Please try again in a few moments.")
             return None
 
     except Exception as e:
         logger.error(f"Transcript error: {str(e)}")
-        st.error("An unexpected error occurred while fetching the transcript. Please try another video.")
+        st.error("An unexpected error occurred while fetching the transcript. Please try again in a few moments.")
         return None
 
 # Main app layout
