@@ -6,6 +6,16 @@ import youtube_transcript_api
 from youtube_transcript_api import YouTubeTranscriptApi
 from groq import Groq
 import base64
+from gtts import gTTS
+import io
+
+# --- gTTS Helper ---
+def tts_audio(text, lang='en'):
+    tts = gTTS(text, lang=lang)
+    fp = io.BytesIO()
+    tts.write_to_fp(fp)
+    fp.seek(0)
+    return fp
 
 # Configure logging to file instead of console
 logging.basicConfig(
@@ -98,6 +108,10 @@ st.markdown("""
             font-weight: 400 !important;
             background-color: white !important;
         }
+        /* Ensure blinking caret is visible */
+        input, textarea {
+            caret-color: #1a1a1a !important;
+        }
 
         /* Style the placeholder text */
         .stTextInput input::placeholder, .stTextArea textarea::placeholder {
@@ -164,6 +178,79 @@ st.markdown("""
         /* Add some spacing between elements */
         .block-container {
             padding-top: 1rem;
+        }
+
+        /* Make success/info/warning messages more compact */
+        .stSuccess, .stInfo, .stWarning {
+            padding: 0.5rem !important;
+            margin-bottom: 0.5rem !important;
+            font-size: 0.9rem !important;
+            line-height: 1.2 !important;
+        }
+        
+        /* Reduce the size of the success/info icons */
+        .stSuccess svg, .stInfo svg, .stWarning svg {
+            height: 1.2rem !important;
+            width: 1.2rem !important;
+            margin-right: 0.5rem !important;
+        }
+
+        /* Base select box styling */
+        .stSelectbox > div > div[data-baseweb="select"] {
+            background-color: white;
+        }
+
+        /* Dropdown menu container */
+        div[data-baseweb="popover"] > div {
+            background-color: white !important;
+            color: #1a1a1a !important;
+            border: 1px solid #ffb3c1 !important;
+            border-radius: 4px;
+        }
+
+        /* Dropdown menu options */
+        div[data-baseweb="popover"] ul {
+            background-color: white !important;
+            color: #1a1a1a !important;
+        }
+
+        /* Individual dropdown options */
+        div[data-baseweb="popover"] li {
+            background-color: white !important;
+            color: #1a1a1a !important;
+        }
+
+        /* Hover state for dropdown options */
+        div[data-baseweb="popover"] li:hover {
+            background-color: #ffe5e9 !important;
+            color: #1a1a1a !important;
+        }
+
+        /* Selected option in dropdown */
+        div[data-baseweb="popover"] li[aria-selected="true"] {
+            background-color: #ffb3c1 !important;
+            color: #1a1a1a !important;
+        }
+
+        /* Input field and selected value */
+        .stSelectbox div[data-baseweb="select"] > div {
+            background-color: white !important;
+            color: #1a1a1a !important;
+        }
+
+        /* Override any dark backgrounds */
+        .stSelectbox div[role="listbox"] {
+            background-color: white !important;
+        }
+
+        .stSelectbox div[role="option"] {
+            background-color: white !important;
+            color: #1a1a1a !important;
+        }
+
+        /* Ensure text is visible in the select box */
+        .stSelectbox [data-testid="stMarkdown"] p {
+            color: #1a1a1a !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -335,10 +422,25 @@ if url:
                             if transcript_data is None:
                                 st.stop()
                             summary = generate_cached_summary(transcript_data['text'])
+                            st.markdown("### AI Summary")
+                            st.session_state['summary_text'] = summary
                             st.write(summary)
                     except Exception as e:
                         logger.error(f"Error in summary generation: {str(e)}")
                         show_error("Unable to generate summary. Please try again.")
+                # Show Read Aloud button and audio if summary is available
+                if 'summary_text' in st.session_state:
+                    if st.button("🔊 Read Aloud (Summary)", key="summary_audio"):
+                        audio_fp = tts_audio(st.session_state['summary_text'])
+                        audio_bytes = audio_fp.read()
+                        audio_html = f"""
+                        <audio controls autoplay style='width: 100%; margin-top: 10px;'>
+                            <source src='data:audio/mp3;base64,{base64.b64encode(audio_bytes).decode()}' type='audio/mp3'>
+                            Your browser does not support the audio element.
+                        </audio>
+                        """
+                        st.markdown(audio_html, unsafe_allow_html=True)
+                    st.write(st.session_state['summary_text'])
             
             with tab2:
                 st.markdown("### Ask AI about the video")
@@ -354,10 +456,26 @@ if url:
                                 messages=[{"role": "user", "content": chat_prompt}],
                                 model="llama-3.3-70b-versatile",
                             )
-                            st.write(chat_completion.choices[0].message.content)
+                            ai_answer = chat_completion.choices[0].message.content
+                            st.markdown("### AI Answer")
+                            st.session_state['ai_answer_text'] = ai_answer
+                            st.write(ai_answer)
                         except Exception as e:
                             logger.error(f"Q&A error: {str(e)}")  # Log to file
                             show_error("Unable to process your question. Please try again.")
+                # Show Read Aloud button and audio if AI answer is available
+                if 'ai_answer_text' in st.session_state:
+                    if st.button("🔊 Read Aloud (AI Answer)", key="ai_answer_audio"):
+                        audio_fp = tts_audio(st.session_state['ai_answer_text'])
+                        audio_bytes = audio_fp.read()
+                        audio_html = f"""
+                        <audio controls autoplay style='width: 100%; margin-top: 10px;'>
+                            <source src='data:audio/mp3;base64,{base64.b64encode(audio_bytes).decode()}' type='audio/mp3'>
+                            Your browser does not support the audio element.
+                        </audio>
+                        """
+                        st.markdown(audio_html, unsafe_allow_html=True)
+                    st.write(st.session_state['ai_answer_text'])
 
         # Show transcript in the left column container
         if st.button("Get Transcript", key="transcript_btn"):
@@ -369,9 +487,25 @@ if url:
                             st.stop()
                         st.info(f"Original video language detected: {transcript_data['original_language']}")
                         st.markdown("### Video Transcription")
+                        st.session_state['transcript_text'] = transcript_data['text']
                         st.write(transcript_data['text'])
             except Exception as e:
                 st.error(f"An error occurred while fetching transcript: {str(e)}")
+        # Show Read Aloud button and audio if transcript is available
+        if 'transcript_text' in st.session_state:
+            # Read Aloud button at the top
+            if st.button("🔊 Read Aloud (Transcript)", key="transcript_audio"):
+                audio_fp = tts_audio(st.session_state['transcript_text'])
+                audio_bytes = audio_fp.read()
+                audio_html = f"""
+                <audio controls autoplay style='width: 100%; margin-top: 10px;'>
+                    <source src='data:audio/mp3;base64,{base64.b64encode(audio_bytes).decode()}' type='audio/mp3'>
+                    Your browser does not support the audio element.
+                </audio>
+                """
+                st.markdown(audio_html, unsafe_allow_html=True)
+            # Always show the transcript text once
+            st.write(st.session_state['transcript_text'])
 
     except IndexError:
         st.error("Invalid YouTube URL. Please enter a valid YouTube video URL.")
